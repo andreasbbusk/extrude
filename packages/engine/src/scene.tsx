@@ -27,7 +27,6 @@ import {
   IntroAnimation,
   LoopAnimation,
   SmoothControls,
-  introComplete,
   type AnimationType,
 } from "./controls";
 import { materialPresets, type MaterialSettings } from "./materials";
@@ -567,9 +566,10 @@ export function SVG3DScene({
 }: SVG3DSceneProps) {
   const meshGroupRef = useRef<THREE.Group>(null);
   const animGroupRef = useRef<THREE.Group>(null);
+  const introCompleteRef = useRef(false);
 
   useEffect(() => {
-    introComplete.current = false;
+    introCompleteRef.current = false;
   }, []);
 
   return (
@@ -609,6 +609,7 @@ export function SVG3DScene({
         duration={introDuration}
         from={introFrom}
         to={introTo}
+        introCompleteRef={introCompleteRef}
         onComplete={onAnimationComplete}
       />
 
@@ -616,6 +617,7 @@ export function SVG3DScene({
         rotationX={rotationX}
         rotationY={rotationY}
         meshRef={meshGroupRef}
+        introCompleteRef={introCompleteRef}
         cursorOrbit={cursorOrbit}
         orbitStrength={orbitStrength}
         draggable={draggable}

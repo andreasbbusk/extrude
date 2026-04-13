@@ -209,10 +209,11 @@ export type {
 
 // Controls
 export {
-  IntroAnimation, introComplete, LoopAnimation,
+  IntroAnimation, LoopAnimation,
   SmoothControls
 } from "./controls";
 export type {
+  IntroCompleteRef,
   AnimationType,
   IntroAnimationProps,
   LoopAnimationProps,

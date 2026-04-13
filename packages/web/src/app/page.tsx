@@ -54,6 +54,7 @@ const SVGTo3DCanvas = dynamic(
 
 export default function Home() {
   // --- Editor state ---
+  const [customSvgInput, setCustomSvgInput] = useState(DEFAULT_STARTER_SVG);
   const [customSvg, setCustomSvg] = useState(DEFAULT_STARTER_SVG);
   const [fileSvg, setFileSvg] = useState("");
   const [pixelSvg, setPixelSvg] = useState("");
@@ -211,6 +212,14 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setCustomSvg(customSvgInput);
+    }, 200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [customSvgInput]);
+
   const handleTextureUpload = useCallback((url: string | null) => {
     setTextureUrl(url);
     if (!url) setTextureSettings(defaultTextureSettings);
@@ -222,6 +231,10 @@ export default function Home() {
 
   const handleTextSvgChange = useCallback((svg: string) => {
     setTextSvg(svg);
+  }, []);
+
+  const handleCustomSvgChange = useCallback((svg: string) => {
+    setCustomSvgInput(svg);
   }, []);
 
   // Show SVG from the active tab. When switching to an empty tab,
@@ -300,8 +313,8 @@ export default function Home() {
               setInputTab(tab);
               setTopPanel("toolbar");
             }}
-            customSvg={customSvg}
-            onCustomSvgChange={setCustomSvg}
+            customSvg={customSvgInput}
+            onCustomSvgChange={handleCustomSvgChange}
             onFileSvgChange={setFileSvg}
             onPixelSvgChange={handlePixelSvgChange}
             onTextSvgChange={handleTextSvgChange}

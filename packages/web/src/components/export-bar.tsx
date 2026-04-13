@@ -10,20 +10,14 @@
 
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import { track } from "@vercel/analytics";
-import {
-  Image,
-  Video,
-  Download,
-  Square,
-  Repeat,
-  X,
-  Settings2,
-  Trash2,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -33,19 +27,22 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { VideoTrimmer } from "@/components/video-trimmer";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { track } from "@vercel/analytics";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Download,
+  Repeat,
+  Square,
+  Trash2
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const IMAGE_PREVIEW_RESOLUTION = 720;
 
 /** Duration of one full animation cycle in seconds, at speed=1 */
 function getCycleDuration(type: string, speed: number): number | null {
@@ -125,7 +122,7 @@ function ViewfinderOverlay({ aspectRatio }: { aspectRatio: number }) {
 
   return (
     <div
-      className="fixed inset-0 pointer-events-none z-[5]"
+      className="fixed inset-0 pointer-events-none z-5"
       style={{
         boxShadow: `0 0 0 9999px rgba(0,0,0,0.5)`,
         width: rectW,
@@ -147,7 +144,7 @@ interface ExportModalProps {
         resolution: number,
         withBackground: boolean,
         onCapture: (dataUrl: string) => void,
-        aspectRatio?: number | null
+        aspectRatio?: number | null,
       ) => void)
     | null
   >;
@@ -169,7 +166,9 @@ export function ExportModal({
   const [resolution, setResolution] = useState(1920);
   const [withBg, setWithBg] = useState(true);
   const [videoFormat, setVideoFormat] = useState<"mp4" | "webm">("mp4");
-  const [videoQuality, setVideoQuality] = useState<"low" | "mid" | "high">("high");
+  const [videoQuality, setVideoQuality] = useState<"low" | "mid" | "high">(
+    "high",
+  );
   const [aspect, setAspect] = useState<string>("free");
   const [videoCycles, setVideoCycles] = useState<number | null>(null);
   const [aspectExpanded, setAspectExpanded] = useState(false);
@@ -276,28 +275,37 @@ export function ExportModal({
         }
       }, 150);
     },
-    [canvasRef, stopRecording]
+    [canvasRef, stopRecording],
   );
 
   const handleImageCapture = useCallback(() => {
     captureFn.current?.(
-      720,
+      IMAGE_PREVIEW_RESOLUTION,
       withBg,
       (dataUrl) => {
         setCapturedImage(dataUrl);
       },
-      aspectRatioValue
+      aspectRatioValue,
     );
-  }, [captureFn, resolution, withBg, aspectRatioValue]);
+  }, [captureFn, withBg, aspectRatioValue]);
 
   const handleImageDownload = useCallback(() => {
-    captureFn.current?.(resolution, withBg, (dataUrl) => {
-      const link = document.createElement("a");
-      link.download = "extrude-export.png";
-      link.href = dataUrl;
-      link.click();
-      track("Image Download", { resolution, withBackground: withBg, aspect: aspect });
-    }, aspectRatioValue);
+    captureFn.current?.(
+      resolution,
+      withBg,
+      (dataUrl) => {
+        const link = document.createElement("a");
+        link.download = "extrude-export.png";
+        link.href = dataUrl;
+        link.click();
+        track("Image Download", {
+          resolution,
+          withBackground: withBg,
+          aspect: aspect,
+        });
+      },
+      aspectRatioValue,
+    );
   }, [resolution, withBg, aspect, aspectRatioValue, captureFn]);
 
   const exportAbortRef = useRef(false);
@@ -325,7 +333,12 @@ export function ExportModal({
         link.download = "extrude-video.webm";
         link.href = url;
         link.click();
-        track("Video Download", { format: "webm", resolution, quality: videoQuality, aspect });
+        track("Video Download", {
+          format: "webm",
+          resolution,
+          quality: videoQuality,
+          aspect,
+        });
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } else {
         // Use FFmpeg for crop, trim, resize, and/or format conversion
@@ -337,23 +350,21 @@ export function ExportModal({
         const filters: string[] = [];
         if (aspectRatioValue) {
           // Center crop to aspect ratio
-          filters.push(`crop=ih*${aspectRatioValue}:ih:(iw-ih*${aspectRatioValue})/2:0`);
+          filters.push(
+            `crop=ih*${aspectRatioValue}:ih:(iw-ih*${aspectRatioValue})/2:0`,
+          );
         }
         filters.push(`scale=${resolution}:-2`);
 
-        const exportDuration = hasTrim ? (endTime - startTime) : videoDuration;
-        const mp4Blob = await convertWebmToMp4(
-          originalWebm,
-          setExportStatus,
-          {
-            trimStart: hasTrim ? startTime : undefined,
-            trimEnd: hasTrim ? endTime : undefined,
-            filters: filters.join(","),
-            bitrate,
-            format: videoFormat,
-            duration: exportDuration,
-          }
-        );
+        const exportDuration = hasTrim ? endTime - startTime : videoDuration;
+        const mp4Blob = await convertWebmToMp4(originalWebm, setExportStatus, {
+          trimStart: hasTrim ? startTime : undefined,
+          trimEnd: hasTrim ? endTime : undefined,
+          filters: filters.join(","),
+          bitrate,
+          format: videoFormat,
+          duration: exportDuration,
+        });
 
         if (exportAbortRef.current) return;
 
@@ -363,7 +374,12 @@ export function ExportModal({
         link.download = `extrude-video.${ext}`;
         link.href = url;
         link.click();
-        track("Video Download", { format: videoFormat, resolution, quality: videoQuality, aspect });
+        track("Video Download", {
+          format: videoFormat,
+          resolution,
+          quality: videoQuality,
+          aspect,
+        });
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
     } finally {
@@ -408,7 +424,9 @@ export function ExportModal({
   if (isRecording && open) {
     return (
       <>
-        {aspectRatioValue && <ViewfinderOverlay aspectRatio={aspectRatioValue} />}
+        {aspectRatioValue && (
+          <ViewfinderOverlay aspectRatio={aspectRatioValue} />
+        )}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -446,29 +464,37 @@ export function ExportModal({
           <DialogTitle>Photo Preview</DialogTitle>
         </DialogHeader>
         {capturedImage && (
-          <div
-            className="rounded-lg overflow-hidden border border-white/[0.06]"
-            style={{
-              backgroundImage: `
-                linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
-                linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
-                linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)
-              `,
-              backgroundSize: "16px 16px",
-              backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-            }}
-          >
-            <img
-              src={capturedImage}
-              alt="Captured preview"
-              className="w-full max-h-[60vh] object-contain"
-            />
+          <div className="space-y-2">
+            <div
+              className="rounded-lg overflow-hidden border border-white/[0.06]"
+              style={{
+                backgroundImage: `
+                  linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
+                  linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
+                  linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
+                  linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)
+                `,
+                backgroundSize: "16px 16px",
+                backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+              }}
+            >
+              <img
+                src={capturedImage}
+                alt="Captured preview"
+                className="w-full max-h-[60vh] object-contain"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Preview quality: {IMAGE_PREVIEW_RESOLUTION}px wide for speed.
+              Download uses the selected resolution below.
+            </p>
           </div>
         )}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Resolution</span>
+            <span className="text-xs text-muted-foreground">
+              Download resolution
+            </span>
             <Select
               value={String(resolution)}
               onValueChange={(v) => setResolution(Number(v))}
@@ -486,10 +512,18 @@ export function ExportModal({
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
             <span className="text-xs text-muted-foreground">Background</span>
-            <Switch checked={withBg} onCheckedChange={(v) => {
-              setWithBg(v);
-              captureFn.current?.(720, v, (dataUrl) => setCapturedImage(dataUrl), aspectRatioValue);
-            }} />
+            <Switch
+              checked={withBg}
+              onCheckedChange={(v) => {
+                setWithBg(v);
+                captureFn.current?.(
+                  IMAGE_PREVIEW_RESOLUTION,
+                  v,
+                  (dataUrl) => setCapturedImage(dataUrl),
+                  aspectRatioValue,
+                );
+              }}
+            />
           </label>
         </div>
         <DialogFooter>
@@ -529,7 +563,9 @@ export function ExportModal({
           <div className="space-y-3">
             <div
               className="rounded-lg border border-white/[0.06] overflow-hidden bg-black flex items-center justify-center max-h-[40vh] mx-auto"
-              style={aspectRatioValue ? { aspectRatio: aspectRatioValue } : undefined}
+              style={
+                aspectRatioValue ? { aspectRatio: aspectRatioValue } : undefined
+              }
             >
               <video
                 ref={videoPreviewRef}
@@ -540,7 +576,9 @@ export function ExportModal({
                   const v = videoPreviewRef.current;
                   if (v) v.paused ? v.play() : v.pause();
                 }}
-                autoPlay={typeof window !== "undefined" && window.innerWidth >= 768}
+                autoPlay={
+                  typeof window !== "undefined" && window.innerWidth >= 768
+                }
                 muted
                 loop
               />
@@ -562,8 +600,13 @@ export function ExportModal({
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Resolution</span>
-            <Select value={String(resolution)} onValueChange={(v) => setResolution(Number(v))}>
-              <SelectTrigger className="h-8 w-24 text-xs"><SelectValue /></SelectTrigger>
+            <Select
+              value={String(resolution)}
+              onValueChange={(v) => setResolution(Number(v))}
+            >
+              <SelectTrigger className="h-8 w-24 text-xs">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="1280">720p</SelectItem>
                 <SelectItem value="1920">1080p</SelectItem>
@@ -574,8 +617,15 @@ export function ExportModal({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Quality</span>
-            <Select value={videoQuality} onValueChange={(v) => setVideoQuality(v as "low" | "mid" | "high")}>
-              <SelectTrigger className="h-8 w-20 text-xs"><SelectValue /></SelectTrigger>
+            <Select
+              value={videoQuality}
+              onValueChange={(v) =>
+                setVideoQuality(v as "low" | "mid" | "high")
+              }
+            >
+              <SelectTrigger className="h-8 w-20 text-xs">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="low">Low</SelectItem>
                 <SelectItem value="mid">Mid</SelectItem>
@@ -585,8 +635,13 @@ export function ExportModal({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Format</span>
-            <Select value={videoFormat} onValueChange={(v) => setVideoFormat(v as "mp4" | "webm")}>
-              <SelectTrigger className="h-8 w-22 text-xs"><SelectValue /></SelectTrigger>
+            <Select
+              value={videoFormat}
+              onValueChange={(v) => setVideoFormat(v as "mp4" | "webm")}
+            >
+              <SelectTrigger className="h-8 w-22 text-xs">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="mp4">MP4</SelectItem>
                 <SelectItem value="webm">WebM</SelectItem>
@@ -617,7 +672,11 @@ export function ExportModal({
             {isExporting && (
               <div
                 className="absolute left-0 top-0 bottom-0 bg-white/20 transition-all duration-300 ease-out"
-                style={{ width: exportStatus.match(/(\d+)%/) ? `${exportStatus.match(/(\d+)%/)?.[1]}%` : "5%" }}
+                style={{
+                  width: exportStatus.match(/(\d+)%/)
+                    ? `${exportStatus.match(/(\d+)%/)?.[1]}%`
+                    : "5%",
+                }}
               />
             )}
             <span className="relative flex items-center gap-1.5">
@@ -626,7 +685,9 @@ export function ExportModal({
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
-              <span className="text-xs">Download {videoFormat.toUpperCase()}</span>
+              <span className="text-xs">
+                Download {videoFormat.toUpperCase()}
+              </span>
             </span>
           </Button>
         </DialogFooter>
@@ -675,13 +736,17 @@ export function ExportModal({
                               ? "bg-black/30 text-white shadow-sm"
                               : "text-white/50 hover:text-white/80"
                           }`}
-                          onClick={() => setVideoCycles(videoCycles === n ? null : n)}
+                          onClick={() =>
+                            setVideoCycles(videoCycles === n ? null : n)
+                          }
                         >
                           <Repeat className="h-3 w-3" />
                           {n}x
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent side="top">Record {n} animation {n === 1 ? "cycle" : "cycles"}</TooltipContent>
+                      <TooltipContent side="top">
+                        Record {n} animation {n === 1 ? "cycle" : "cycles"}
+                      </TooltipContent>
                     </Tooltip>
                   ))}
                 </motion.div>
@@ -697,7 +762,10 @@ export function ExportModal({
                 <ShutterButton
                   mode="video"
                   onClick={() => {
-                    const autoStopMs = videoCycles && cycleSec ? cycleSec * videoCycles * 1000 : undefined;
+                    const autoStopMs =
+                      videoCycles && cycleSec
+                        ? cycleSec * videoCycles * 1000
+                        : undefined;
                     startRecording(autoStopMs);
                   }}
                 />
@@ -733,8 +801,12 @@ export function ExportModal({
               <div
                 className="flex items-center gap-0.5 overflow-hidden"
                 onMouseLeave={() => {
-                  if (aspectTimerRef.current) clearTimeout(aspectTimerRef.current);
-                  aspectTimerRef.current = setTimeout(() => setAspectExpanded(false), 500);
+                  if (aspectTimerRef.current)
+                    clearTimeout(aspectTimerRef.current);
+                  aspectTimerRef.current = setTimeout(
+                    () => setAspectExpanded(false),
+                    500,
+                  );
                 }}
               >
                 <AnimatePresence mode="popLayout">
@@ -746,8 +818,21 @@ export function ExportModal({
                         key={opt.value}
                         layout
                         initial={{ opacity: 0, width: 0 }}
-                        animate={{ opacity: 1, width: "auto", transition: { duration: 0.2, ease: "easeInOut" } }}
-                        exit={{ opacity: 0, width: 0, transition: { duration: 0.5, ease: "easeInOut", opacity: { duration: 0.15 }, width: { delay: 0.12, duration: 0.4 } } }}
+                        animate={{
+                          opacity: 1,
+                          width: "auto",
+                          transition: { duration: 0.2, ease: "easeInOut" },
+                        }}
+                        exit={{
+                          opacity: 0,
+                          width: 0,
+                          transition: {
+                            duration: 0.5,
+                            ease: "easeInOut",
+                            opacity: { duration: 0.15 },
+                            width: { delay: 0.12, duration: 0.4 },
+                          },
+                        }}
                         className={`rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap cursor-pointer overflow-hidden transition-colors ${
                           isActive && aspectExpanded
                             ? "bg-black/30 text-white shadow-sm"
@@ -769,7 +854,6 @@ export function ExportModal({
                   })}
                 </AnimatePresence>
               </div>
-
             </div>
           </motion.div>
         )}

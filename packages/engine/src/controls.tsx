@@ -14,7 +14,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import type * as THREE from "three";
 
-export const introComplete = { current: false };
+export interface IntroCompleteRef {
+  current: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // IntroAnimation
@@ -25,6 +27,7 @@ export interface IntroAnimationProps {
   duration: number;
   from: { zoom?: number; opacity?: number };
   to: { zoom?: number; opacity?: number };
+  introCompleteRef: IntroCompleteRef;
   onComplete?: () => void;
 }
 
@@ -33,6 +36,7 @@ export function IntroAnimation({
   duration,
   from,
   to,
+  introCompleteRef,
   onComplete,
 }: IntroAnimationProps) {
   const { camera, gl } = useThree();
@@ -42,14 +46,14 @@ export function IntroAnimation({
 
   if (!initialized.current && type !== "none") {
     initialized.current = true;
-    introComplete.current = false;
+    introCompleteRef.current = false;
     camera.position.z = from.zoom ?? 18;
     gl.domElement.style.opacity = String(from.opacity ?? 0);
   }
 
   if (type === "none" && !initialized.current) {
     initialized.current = true;
-    introComplete.current = true;
+    introCompleteRef.current = true;
     camera.position.z = to.zoom ?? 8;
     gl.domElement.style.opacity = "1";
   }
@@ -78,7 +82,7 @@ export function IntroAnimation({
     }
 
     if (progress.current >= 1) {
-      introComplete.current = true;
+      introCompleteRef.current = true;
       gl.domElement.style.opacity = "1";
       camera.position.z = toZ;
       if (!completeFired.current) {
@@ -185,6 +189,7 @@ export interface SmoothControlsProps {
   rotationX: number;
   rotationY: number;
   meshRef: React.RefObject<THREE.Group | null>;
+  introCompleteRef: IntroCompleteRef;
   cursorOrbit: boolean;
   orbitStrength: number;
   draggable: boolean;
@@ -199,6 +204,7 @@ export function SmoothControls({
   rotationX,
   rotationY,
   meshRef,
+  introCompleteRef,
   cursorOrbit,
   orbitStrength,
   draggable,
@@ -252,7 +258,7 @@ export function SmoothControls({
 
     // Check if idle reset should be active
     let resetting = false;
-    if (resetOnIdle && introComplete.current) {
+    if (resetOnIdle && introCompleteRef.current) {
       const idle = performance.now() - lastInteraction.current;
       resetting =
         !isDragging.current &&
@@ -298,7 +304,7 @@ export function SmoothControls({
       (targetRotation.current.y - cur.y) *
       (cursorOrbit && !isDragging.current ? orbitDamping : damping);
 
-    if (introComplete.current) {
+    if (introCompleteRef.current) {
       // Responsive: push camera back on narrow/portrait viewports so object fits
       const aspect =
         gl.domElement.clientWidth / (gl.domElement.clientHeight || 1);
